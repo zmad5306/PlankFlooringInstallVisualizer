@@ -11,7 +11,10 @@
     <section class="preview">
       <div class="preview-header">
         <div class="preview-title">Floor Layout Preview</div>
-        <div class="preview-note" id="directionNote"></div>
+        <div class="preview-tools">
+          <div class="preview-note" id="directionNote"></div>
+          <button id="fitView" type="button" class="icon-button">Fit</button>
+        </div>
       </div>
       <canvas id="canvas"></canvas>
       <div id="piecePopover" class="piece-popover" hidden></div>
@@ -21,12 +24,67 @@
       <h1>Plank Floor Visualizer</h1>
 
       <h2>Room</h2>
-      <label>Length (in)
-        <input id="roomLength" type="number" min="1" step="0.25" value="144">
+      <div class="segmented" aria-label="Room shape">
+        <label>
+          <input type="radio" name="shapeMode" value="rectangle" checked>
+          <span>Rectangle</span>
+        </label>
+        <label>
+          <input type="radio" name="shapeMode" value="custom">
+          <span>Custom</span>
+        </label>
+      </div>
+      <div id="rectangleRoomFields">
+        <label>Length (in)
+          <input id="roomLength" type="number" min="1" step="0.25" value="144">
+        </label>
+        <label>Width (in)
+          <input id="roomWidth" type="number" min="1" step="0.25" value="120">
+        </label>
+      </div>
+      <div id="customRoomFields" class="hidden">
+        <label>Perimeter segments
+          <textarea id="outlineSegments" rows="7" spellcheck="false">E 144
+S 96
+W 36
+S 24
+W 108
+N 120</textarea>
+        </label>
+        <p class="field-note" id="shapeStatus"></p>
+      </div>
+
+      <h2>Walls & Openings</h2>
+      <label class="checkbox-row">
+        <input id="enableDividerWall" type="checkbox">
+        <span>Divider wall with doorway</span>
       </label>
-      <label>Width (in)
-        <input id="roomWidth" type="number" min="1" step="0.25" value="120">
-      </label>
+      <div id="dividerWallFields" class="hidden">
+        <label>Wall orientation
+          <select id="wallOrientation">
+            <option value="vertical" selected>Vertical</option>
+            <option value="horizontal">Horizontal</option>
+          </select>
+        </label>
+        <label>Wall X from left (in)
+          <input id="wallX" type="number" min="0" step="0.25" value="72">
+        </label>
+        <label>Wall Y from top (in)
+          <input id="wallY" type="number" min="0" step="0.25" value="0">
+        </label>
+        <label>Wall length (in)
+          <input id="wallLength" type="number" min="0" step="0.25" value="120">
+        </label>
+        <label>Wall thickness (in)
+          <input id="wallThickness" type="number" min="0" step="0.25" value="4.5">
+        </label>
+        <label>Doorway offset from wall start (in)
+          <input id="doorOffset" type="number" min="0" step="0.25" value="42">
+        </label>
+        <label>Doorway width (in)
+          <input id="doorWidth" type="number" min="0" step="0.25" value="32">
+        </label>
+      </div>
 
       <h2>Planks</h2>
       <label>Length (in)
@@ -79,7 +137,7 @@
         <div><dt>Adjusted staggers</dt><dd id="adjustedRows">-</dd></div>
         <div><dt>Offcut pieces reused</dt><dd id="offcutsReused">-</dd></div>
         <div><dt>End-cut stock planks</dt><dd id="cutStockPlanks">-</dd></div>
-        <div><dt>Rip-only pieces</dt><dd id="ripOnlyPieces">-</dd></div>
+        <div><dt>Ripped pieces</dt><dd id="ripOnlyPieces">-</dd></div>
         <div><dt>Waste over room</dt><dd id="wasteRoom">-</dd></div>
         <div><dt>Waste purchased</dt><dd id="wastePurchased">-</dd></div>
         <div><dt>Installed area</dt><dd id="installedArea">-</dd></div>

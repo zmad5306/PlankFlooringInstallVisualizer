@@ -70,7 +70,8 @@ label {
 }
 
 input[type="number"],
-select {
+select,
+textarea {
   width: 100%;
   min-height: 38px;
   border: 1px solid var(--line);
@@ -79,6 +80,34 @@ select {
   color: var(--ink);
   font: inherit;
   background: #fbfcfd;
+}
+
+textarea {
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.35;
+}
+
+.hidden {
+  display: none;
+}
+
+.field-note {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+}
+
+.checkbox-row input {
+  margin: 0;
 }
 
 .secondary-button {
@@ -322,6 +351,31 @@ select {
   text-align: right;
 }
 
+.preview-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.icon-button {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: var(--ink);
+  background: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  border-color: var(--accent);
+}
+
 canvas {
   width: 100%;
   height: 100%;
@@ -329,6 +383,12 @@ canvas {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #f8fafb;
+  cursor: grab;
+  touch-action: none;
+}
+
+canvas.is-panning {
+  cursor: grabbing;
 }
 
 .error {
