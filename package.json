@@ -1,0 +1,9 @@
+{
+  "name": "plank-floor-visualizer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static plank floor layout visualizer for rectangular rooms.",
+  "scripts": {
+    "dev": "node server.mjs"
+  }
+}

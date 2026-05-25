@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plank Floor Visualizer</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main>
+    <section class="preview">
+      <div class="preview-header">
+        <div class="preview-title">Floor Layout Preview</div>
+        <div class="preview-note" id="directionNote"></div>
+      </div>
+      <canvas id="canvas"></canvas>
+    </section>
+
+    <aside>
+      <h1>Plank Floor Visualizer</h1>
+
+      <h2>Room</h2>
+      <label>Length (in)
+        <input id="roomLength" type="number" min="1" step="0.25" value="144">
+      </label>
+      <label>Width (in)
+        <input id="roomWidth" type="number" min="1" step="0.25" value="120">
+      </label>
+
+      <h2>Planks</h2>
+      <label>Length (in)
+        <input id="plankLength" type="number" min="1" step="0.25" value="48">
+      </label>
+      <label>Width (in)
+        <input id="plankWidth" type="number" min="1" step="0.25" value="7">
+      </label>
+
+      <h2>Installer Limits</h2>
+      <label>Minimum end cut (in)
+        <input id="minEndCut" type="number" min="0" step="0.25" value="8">
+      </label>
+      <label>Minimum rip width (in)
+        <input id="minRipWidth" type="number" min="0" step="0.25" value="2">
+      </label>
+
+      <h2>Layout</h2>
+      <div class="segmented" aria-label="Plank direction">
+        <label>
+          <input type="radio" name="orientation" value="long" checked>
+          <span>Long side</span>
+        </label>
+        <label>
+          <input type="radio" name="orientation" value="short">
+          <span>Short side</span>
+        </label>
+      </div>
+      <label>Starter end profile
+        <select id="starterProfile">
+          <option value="tongue" selected>Tongue on starter end</option>
+          <option value="groove">Groove on starter end</option>
+        </select>
+      </label>
+      <button id="resetSettings" type="button" class="secondary-button">Reset saved options</button>
+
+      <div class="legend">
+        <span><i class="swatch full"></i>Full plank</span>
+        <span><i class="swatch cut"></i>Cut plank</span>
+      </div>
+
+      <h2>Estimate</h2>
+      <dl class="summary">
+        <div><dt>Planks needed</dt><dd id="planksNeeded">-</dd></div>
+        <div><dt>Full pieces</dt><dd id="fullPieces">-</dd></div>
+        <div><dt>Cut pieces</dt><dd id="cutPieces">-</dd></div>
+        <div><dt>Rows</dt><dd id="rows">-</dd></div>
+        <div><dt>First row rip</dt><dd id="firstRip">-</dd></div>
+        <div><dt>Last row rip</dt><dd id="lastRip">-</dd></div>
+        <div><dt>Adjusted staggers</dt><dd id="adjustedRows">-</dd></div>
+        <div><dt>Offcut pieces reused</dt><dd id="offcutsReused">-</dd></div>
+        <div><dt>End-cut stock planks</dt><dd id="cutStockPlanks">-</dd></div>
+        <div><dt>Rip-only pieces</dt><dd id="ripOnlyPieces">-</dd></div>
+        <div><dt>Waste over room</dt><dd id="wasteRoom">-</dd></div>
+        <div><dt>Waste purchased</dt><dd id="wastePurchased">-</dd></div>
+        <div><dt>Installed area</dt><dd id="installedArea">-</dd></div>
+        <div><dt>Purchased area</dt><dd id="purchasedArea">-</dd></div>
+      </dl>
+      <p class="reuse-note" id="reuseNote"></p>
+      <h2>Rip Cuts</h2>
+      <div id="ripList" class="cut-list"></div>
+      <h2>Cut List</h2>
+      <div id="cutList" class="cut-list"></div>
+      <h2>Cut Stock Groups</h2>
+      <div id="cutGroups" class="cut-pack-list"></div>
+      <div id="error" class="error"></div>
+    </aside>
+  </main>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
