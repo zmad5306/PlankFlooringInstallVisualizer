@@ -24,7 +24,7 @@ This project is ready to host as a static site. In the repository settings, enab
 - Rectangle rooms or custom axis-aligned room outlines entered as direction/length perimeter segments
 - Optional divider wall with doorway gap
 - Plank width and length inputs, defaulting to 7 x 48 inches
-- 1/3 stair-step row offset pattern with minimum end-cut adjustment
+- Selectable half, third, or fourth stair-step row offset pattern with minimum end-cut adjustment
 - Minimum rip width handling by balancing first and last row rips
 - Planks can run along the room's long side or short side
 - Starting corner can be selected to control which end receives starter cuts

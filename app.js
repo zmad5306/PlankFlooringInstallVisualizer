@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS = {
   minRipWidth: "2",
   orientation: "long",
   startCorner: "NW",
+  staggerDivisions: "3",
   starterProfile: "tongue"
 };
 
@@ -99,6 +100,7 @@ function currentInputs() {
     minRipWidth: nonNegativeValue("minRipWidth", "Minimum rip width"),
     orientation: document.querySelector("input[name='orientation']:checked").value,
     startCorner: document.getElementById("startCorner").value,
+    staggerDivisions: numberValue("staggerDivisions", "Stair step"),
     starterProfile: document.getElementById("starterProfile").value
   };
 }
@@ -131,6 +133,7 @@ function readSettingsFromControls() {
     minRipWidth: document.getElementById("minRipWidth").value,
     orientation: selectedOrientationControl()?.value || DEFAULT_SETTINGS.orientation,
     startCorner: document.getElementById("startCorner").value,
+    staggerDivisions: document.getElementById("staggerDivisions").value,
     starterProfile: document.getElementById("starterProfile").value
   };
 }
@@ -153,6 +156,7 @@ function applySettings(settings) {
   document.getElementById("minEndCut").value = merged.minEndCut;
   document.getElementById("minRipWidth").value = merged.minRipWidth;
   document.getElementById("startCorner").value = merged.startCorner;
+  document.getElementById("staggerDivisions").value = merged.staggerDivisions;
   document.getElementById("starterProfile").value = merged.starterProfile;
 
   const orientation = document.querySelector(`input[name='orientation'][value='${merged.orientation}']`);
@@ -775,7 +779,7 @@ function mergeIntervals(intervals) {
 }
 
 function buildLayout(room, values) {
-  const { plankLength, plankWidth, minEndCut, minRipWidth } = values;
+  const { plankLength, plankWidth, minEndCut, minRipWidth, staggerDivisions } = values;
   const layoutRoom = layoutRoomForInstall(room, values);
   const rowDepth = layoutRoom.height;
   const blockedRects = wallBlockedRects(values).map((rect) => roomWallToLayoutRect(rect, room, values));
@@ -836,7 +840,7 @@ function buildLayout(room, values) {
   for (let row = 0; row < rowBoundaries.length - 1; row += 1) {
     const rowStart = rowBoundaries[row];
     const rowEnd = rowBoundaries[row + 1];
-    const nominalOffset = (row % 3) * plankLength / 3;
+    const nominalOffset = (row % staggerDivisions) * plankLength / staggerDivisions;
     const rowIntervals = intervalsForRow(rowStart, rowEnd);
     intervalsByRow.set(row, rowIntervals);
     if (!rowIntervals.length) {
