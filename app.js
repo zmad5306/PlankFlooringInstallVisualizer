@@ -15,6 +15,9 @@ const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 const controls = [...document.querySelectorAll("input, select")];
 const resetSettings = document.getElementById("resetSettings");
+const piecePopover = document.getElementById("piecePopover");
+let drawnPieces = [];
+let latestValues = null;
 
 const els = {
   planksNeeded: document.getElementById("planksNeeded"),
@@ -518,6 +521,13 @@ function renderCutGroups(packing, values) {
   });
 }
 
+function pieceLabel(piece, values) {
+  const kind = cutKind(piece, values);
+  const profile = keepProfile(piece, values);
+  const profileText = profile ? `, ${profile}` : "";
+  return `${kind}${profileText}`;
+}
+
 function pieceToRoomRect(piece, runAxis) {
   if (runAxis === "length") {
     return { x: piece.x, y: piece.y, width: piece.length, height: piece.width };
@@ -563,6 +573,7 @@ function drawGrain(x, y, width, height, full) {
 
 function draw(values, pieces, runAxis) {
   const rect = resizeCanvas();
+  drawnPieces = [];
   ctx.clearRect(0, 0, rect.width, rect.height);
   ctx.fillStyle = "#f8fafb";
   ctx.fillRect(0, 0, rect.width, rect.height);
@@ -588,6 +599,7 @@ function draw(values, pieces, runAxis) {
     const y = originY + roomPiece.y * scale;
     const width = roomPiece.width * scale;
     const height = roomPiece.height * scale;
+    drawnPieces.push({ piece, x, y, width, height });
     ctx.fillStyle = piece.full ? "#d59a51" : "#6ca6c8";
     ctx.strokeStyle = piece.full ? "#704c25" : "#255b72";
     ctx.lineWidth = 1;
@@ -601,6 +613,75 @@ function draw(values, pieces, runAxis) {
   ctx.fillStyle = "#20262d";
   ctx.font = "700 13px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
   ctx.fillText(`${values.roomLength}" x ${values.roomWidth}" room`, originX, Math.max(18, originY - 14));
+}
+
+function pieceAtPoint(x, y) {
+  for (let index = drawnPieces.length - 1; index >= 0; index -= 1) {
+    const drawn = drawnPieces[index];
+    if (
+      x >= drawn.x
+      && x <= drawn.x + drawn.width
+      && y >= drawn.y
+      && y <= drawn.y + drawn.height
+    ) {
+      return drawn.piece.full ? null : drawn;
+    }
+  }
+  return null;
+}
+
+function setPopoverContent(piece, values) {
+  piecePopover.replaceChildren();
+
+  const title = document.createElement("strong");
+  title.textContent = `${formatInches(piece.length)}" L x ${formatInches(piece.width)}" W`;
+
+  const cut = document.createElement("span");
+  cut.textContent = pieceLabel(piece, values);
+
+  const row = document.createElement("span");
+  row.textContent = `Row ${piece.row + 1}, ${sideLabel(piece)}`;
+
+  piecePopover.append(title, cut, row);
+}
+
+function showPiecePopover(event, drawn) {
+  if (!latestValues || !drawn) {
+    hidePiecePopover();
+    return;
+  }
+
+  const canvasRect = canvas.getBoundingClientRect();
+  const previewRect = canvas.parentElement.getBoundingClientRect();
+  const localX = event.clientX - canvasRect.left;
+  const localY = event.clientY - canvasRect.top;
+
+  setPopoverContent(drawn.piece, latestValues);
+  piecePopover.hidden = false;
+
+  const popoverRect = piecePopover.getBoundingClientRect();
+  let left = canvasRect.left - previewRect.left + localX + 12;
+  let top = canvasRect.top - previewRect.top + localY + 12;
+  const maxLeft = previewRect.width - popoverRect.width - 8;
+  const maxTop = previewRect.height - popoverRect.height - 8;
+
+  left = Math.max(8, Math.min(left, maxLeft));
+  top = Math.max(8, Math.min(top, maxTop));
+  piecePopover.style.left = `${left}px`;
+  piecePopover.style.top = `${top}px`;
+}
+
+function hidePiecePopover() {
+  piecePopover.hidden = true;
+}
+
+function handleCanvasPointer(event) {
+  const rect = canvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  const drawn = pieceAtPoint(x, y);
+  canvas.style.cursor = drawn ? "help" : "default";
+  showPiecePopover(event, drawn);
 }
 
 function fmtArea(area) {
@@ -617,6 +698,7 @@ function update(options = {}) {
     const layout = buildLayout(oriented.runLength, oriented.rowDepth, values);
     const pieces = layout.pieces;
     const estimate = estimateMaterial(pieces, values);
+    latestValues = values;
     els.planksNeeded.textContent = estimate.plankCount;
     els.fullPieces.textContent = estimate.fullCount;
     els.cutPieces.textContent = estimate.cutCount;
@@ -641,6 +723,7 @@ function update(options = {}) {
     renderCutGroups(estimate.cutPacking, values);
     els.directionNote.textContent = `Planks run along the room ${oriented.runAxis}.`;
     els.error.textContent = "";
+    hidePiecePopover();
     draw(values, pieces, oriented.runAxis);
   } catch (error) {
     resizeCanvas();
@@ -654,6 +737,9 @@ controls.forEach((control) => {
   control.addEventListener("change", update);
 });
 resetSettings.addEventListener("click", resetSavedSettings);
+canvas.addEventListener("pointermove", handleCanvasPointer);
+canvas.addEventListener("pointerdown", handleCanvasPointer);
+canvas.addEventListener("pointerleave", hidePiecePopover);
 window.addEventListener("resize", update);
 loadSavedSettings();
 update();
