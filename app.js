@@ -18,6 +18,7 @@ const DEFAULT_SETTINGS = {
   minEndCut: "8",
   minRipWidth: "2",
   orientation: "long",
+  startCorner: "NW",
   starterProfile: "tongue"
 };
 
@@ -97,6 +98,7 @@ function currentInputs() {
     minEndCut: nonNegativeValue("minEndCut", "Minimum end cut"),
     minRipWidth: nonNegativeValue("minRipWidth", "Minimum rip width"),
     orientation: document.querySelector("input[name='orientation']:checked").value,
+    startCorner: document.getElementById("startCorner").value,
     starterProfile: document.getElementById("starterProfile").value
   };
 }
@@ -128,6 +130,7 @@ function readSettingsFromControls() {
     minEndCut: document.getElementById("minEndCut").value,
     minRipWidth: document.getElementById("minRipWidth").value,
     orientation: selectedOrientationControl()?.value || DEFAULT_SETTINGS.orientation,
+    startCorner: document.getElementById("startCorner").value,
     starterProfile: document.getElementById("starterProfile").value
   };
 }
@@ -149,6 +152,7 @@ function applySettings(settings) {
   document.getElementById("plankWidth").value = merged.plankWidth;
   document.getElementById("minEndCut").value = merged.minEndCut;
   document.getElementById("minRipWidth").value = merged.minRipWidth;
+  document.getElementById("startCorner").value = merged.startCorner;
   document.getElementById("starterProfile").value = merged.starterProfile;
 
   const orientation = document.querySelector(`input[name='orientation'][value='${merged.orientation}']`);
@@ -447,6 +451,98 @@ function runRectToRoomRect(x, y, length, width, runAxis) {
   return { x: y, y: x, width, height: length };
 }
 
+function pointToLayout(point, room, values) {
+  const fromWest = values.startCorner.includes("W");
+  const fromNorth = values.startCorner.includes("N");
+
+  if (room.runAxis === "length") {
+    return {
+      x: fromWest ? point.x : room.width - point.x,
+      y: fromNorth ? point.y : room.height - point.y
+    };
+  }
+
+  return {
+    x: fromNorth ? point.y : room.height - point.y,
+    y: fromWest ? point.x : room.width - point.x
+  };
+}
+
+function pointFromLayout(point, room, values) {
+  const fromWest = values.startCorner.includes("W");
+  const fromNorth = values.startCorner.includes("N");
+
+  if (room.runAxis === "length") {
+    return {
+      x: fromWest ? point.x : room.width - point.x,
+      y: fromNorth ? point.y : room.height - point.y
+    };
+  }
+
+  return {
+    x: fromWest ? point.y : room.width - point.y,
+    y: fromNorth ? point.x : room.height - point.x
+  };
+}
+
+function rectFromTransformedCorners(corners) {
+  const xs = corners.map((point) => point.x);
+  const ys = corners.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  const maxX = Math.max(...xs);
+  const maxY = Math.max(...ys);
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY
+  };
+}
+
+function roomRectToLayoutRect(rect, room, values) {
+  return rectFromTransformedCorners([
+    pointToLayout({ x: rect.x, y: rect.y }, room, values),
+    pointToLayout({ x: rect.x + rect.width, y: rect.y }, room, values),
+    pointToLayout({ x: rect.x + rect.width, y: rect.y + rect.height }, room, values),
+    pointToLayout({ x: rect.x, y: rect.y + rect.height }, room, values)
+  ]);
+}
+
+function layoutRectToRoomRect(rect, room, values) {
+  return rectFromTransformedCorners([
+    pointFromLayout({ x: rect.x, y: rect.y }, room, values),
+    pointFromLayout({ x: rect.x + rect.width, y: rect.y }, room, values),
+    pointFromLayout({ x: rect.x + rect.width, y: rect.y + rect.height }, room, values),
+    pointFromLayout({ x: rect.x, y: rect.y + rect.height }, room, values)
+  ]);
+}
+
+function roomWallToLayoutRect(rect, room, values) {
+  const layoutRect = roomRectToLayoutRect(
+    { x: rect.x1, y: rect.y1, width: rect.x2 - rect.x1, height: rect.y2 - rect.y1 },
+    room,
+    values
+  );
+  return {
+    x1: layoutRect.x,
+    y1: layoutRect.y,
+    x2: layoutRect.x + layoutRect.width,
+    y2: layoutRect.y + layoutRect.height
+  };
+}
+
+function layoutRoomForInstall(room, values) {
+  const polygon = room.polygon.map((point) => pointToLayout(point, room, values));
+  const bounds = polygonBounds(polygon);
+  return {
+    polygon,
+    width: bounds.maxX - bounds.minX,
+    height: bounds.maxY - bounds.minY,
+    area: room.area
+  };
+}
+
 function clippedBoundsForRoomRect(rect, room, blockedRects) {
   const splits = new Set([
     Number(rect.y.toFixed(3)),
@@ -472,6 +568,7 @@ function clippedBoundsForRoomRect(rect, room, blockedRects) {
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
+  const visibleBands = [];
 
   for (let index = 0; index < points.length - 1; index += 1) {
     const y1 = points[index];
@@ -494,6 +591,7 @@ function clippedBoundsForRoomRect(rect, room, blockedRects) {
         minY = Math.min(minY, y1);
         maxX = Math.max(maxX, x2);
         maxY = Math.max(maxY, y2);
+        visibleBands.push({ x1, x2, y1, y2 });
       }
     });
   }
@@ -502,11 +600,20 @@ function clippedBoundsForRoomRect(rect, room, blockedRects) {
     return null;
   }
 
+  const firstBand = visibleBands[0];
+  const edgeRip = visibleBands.some((band) => {
+    return (
+      Math.abs(band.x1 - firstBand.x1) > 0.001
+      || Math.abs(band.x2 - firstBand.x2) > 0.001
+    );
+  }) || minY > rect.y + 0.001 || maxY < rect.y + rect.height - 0.001;
+
   return {
     x: minX,
     y: minY,
     width: maxX - minX,
-    height: maxY - minY
+    height: maxY - minY,
+    edgeRip
   };
 }
 
@@ -562,7 +669,7 @@ function ripPlan(rowDepth, plankWidth, minRipWidth) {
   let adjusted = false;
   const targetRip = Math.min(minRipWidth, plankWidth);
 
-  if (lastRip < targetRip) {
+  if (lastRip < plankWidth - 0.001 || lastRip < targetRip) {
     const balancedEdgeRip = (plankWidth + lastRip) / 2;
     firstRip = balancedEdgeRip;
     lastRip = balancedEdgeRip;
@@ -649,11 +756,29 @@ function positiveModulo(value, divisor) {
   return ((value % divisor) + divisor) % divisor;
 }
 
+function mergeIntervals(intervals) {
+  const sorted = intervals
+    .filter(([start, end]) => end - start > MIN_VISIBLE_PLANK)
+    .sort((a, b) => a[0] - b[0]);
+  const merged = [];
+
+  sorted.forEach(([start, end]) => {
+    const previous = merged[merged.length - 1];
+    if (previous && start <= previous[1] + 0.001) {
+      previous[1] = Math.max(previous[1], end);
+      return;
+    }
+    merged.push([start, end]);
+  });
+
+  return merged;
+}
+
 function buildLayout(room, values) {
   const { plankLength, plankWidth, minEndCut, minRipWidth } = values;
-  const runAxis = room.runAxis;
-  const rowDepth = runAxis === "length" ? room.height : room.width;
-  const blockedRects = wallBlockedRects(values);
+  const layoutRoom = layoutRoomForInstall(room, values);
+  const rowDepth = layoutRoom.height;
+  const blockedRects = wallBlockedRects(values).map((rect) => roomWallToLayoutRect(rect, room, values));
   const rips = ripPlan(rowDepth, plankWidth, minRipWidth);
   const pieces = [];
   let adjustedStaggers = 0;
@@ -665,37 +790,72 @@ function buildLayout(room, values) {
     return next;
   }, 0);
 
-  const bands = rowBoundaries
-    .filter((point) => point >= 0 && point <= rowDepth)
-    .map((start, index, points) => ({ start, end: points[index + 1] }))
-    .filter((band) => band.end !== undefined && band.end - band.start > MIN_VISIBLE_PLANK);
-
-  function rowForSample(sample) {
-    for (let row = 0; row < rowBoundaries.length - 1; row += 1) {
-      if (sample >= rowBoundaries[row] - 0.001 && sample < rowBoundaries[row + 1] - 0.001) {
-        return row;
-      }
+  const layoutSplitPoints = new Set();
+  layoutRoom.polygon.forEach((point) => {
+    if (point.y > 0.001 && point.y < rowDepth - 0.001) {
+      layoutSplitPoints.add(Number(point.y.toFixed(3)));
     }
-    return rowBoundaries.length - 2;
+  });
+  blockedRects.forEach((rect) => {
+    if (rect.y1 > 0.001 && rect.y1 < rowDepth - 0.001) {
+      layoutSplitPoints.add(Number(rect.y1.toFixed(3)));
+    }
+    if (rect.y2 > 0.001 && rect.y2 < rowDepth - 0.001) {
+      layoutSplitPoints.add(Number(rect.y2.toFixed(3)));
+    }
+  });
+
+  const internalSplitPoints = [...layoutSplitPoints]
+    .filter((point) => point >= 0 && point <= rowDepth)
+    .sort((a, b) => a - b);
+
+  function intervalsForRow(rowStart, rowEnd) {
+    const samples = new Set([Number(((rowStart + rowEnd) / 2).toFixed(3))]);
+    internalSplitPoints.forEach((point) => {
+      if (point > rowStart + 0.001 && point < rowEnd - 0.001) {
+        samples.add(Number(((rowStart + point) / 2).toFixed(3)));
+        samples.add(Number(((point + rowEnd) / 2).toFixed(3)));
+      }
+    });
+
+    const intervals = [];
+    samples.forEach((sample) => {
+      subtractWallsFromIntervals(
+        polygonIntervalsAt(layoutRoom.polygon, "length", sample),
+        "length",
+        sample,
+        blockedRects
+      ).forEach((interval) => intervals.push(interval));
+    });
+
+    return mergeIntervals(intervals);
   }
 
-  bands.forEach((band) => {
-    const y = band.start;
-    const width = band.end - band.start;
-    const sample = y + width / 2;
-    const row = rowForSample(sample);
+  const offsetsByRow = new Map();
+  const intervalsByRow = new Map();
+  for (let row = 0; row < rowBoundaries.length - 1; row += 1) {
+    const rowStart = rowBoundaries[row];
+    const rowEnd = rowBoundaries[row + 1];
     const nominalOffset = (row % 3) * plankLength / 3;
-    const floorIntervals = subtractWallsFromIntervals(
-      polygonIntervalsAt(room.polygon, runAxis, sample),
-      runAxis,
-      sample,
-      blockedRects
-    );
-    const offsetChoice = chooseOffset(floorIntervals, plankLength, minEndCut, nominalOffset);
-    const offset = offsetChoice.offset;
-    if (Math.abs(offset - nominalOffset) > 0.01) {
+    const rowIntervals = intervalsForRow(rowStart, rowEnd);
+    intervalsByRow.set(row, rowIntervals);
+    if (!rowIntervals.length) {
+      offsetsByRow.set(row, nominalOffset);
+      continue;
+    }
+    const offsetChoice = chooseOffset(rowIntervals, plankLength, minEndCut, nominalOffset);
+    offsetsByRow.set(row, offsetChoice.offset);
+    if (Math.abs(offsetChoice.offset - nominalOffset) > 0.01) {
       adjustedStaggers += 1;
     }
+  }
+
+  for (let row = 0; row < rowBoundaries.length - 1; row += 1) {
+    const y = rowBoundaries[row];
+    const width = rowBoundaries[row + 1] - rowBoundaries[row];
+    if (width <= MIN_VISIBLE_PLANK) continue;
+    const floorIntervals = intervalsByRow.get(row) || [];
+    const offset = offsetsByRow.get(row) ?? 0;
 
     floorIntervals.forEach(([intervalStart, intervalEnd]) => {
       let x = Math.floor((intervalStart + offset) / plankLength) * plankLength - offset;
@@ -705,11 +865,11 @@ function buildLayout(room, values) {
         const visibleEnd = Math.min(x + plankLength, intervalEnd);
         const length = visibleEnd - visibleStart;
         if (length > MIN_VISIBLE_PLANK) {
-          const roomRect = runRectToRoomRect(visibleStart, y, length, width, runAxis);
-          const outlineCut = !rectFullyInsidePolygon(roomRect, room.polygon);
-          const wallCut = blockedRects.some((rect) => rectsOverlap(roomRect, rect));
-          const clippedRect = clippedBoundsForRoomRect(roomRect, room, blockedRects) || roomRect;
-          const cutDimensions = dimensionsFromRoomRect(clippedRect, runAxis);
+          const layoutRect = { x: visibleStart, y, width: length, height: width };
+          const outlineCut = !rectFullyInsidePolygon(layoutRect, layoutRoom.polygon);
+          const wallCut = blockedRects.some((rect) => rectsOverlap(layoutRect, rect));
+          const clippedRect = clippedBoundsForRoomRect(layoutRect, layoutRoom, blockedRects) || layoutRect;
+          const cutDimensions = dimensionsFromRoomRect(clippedRect, "length");
           pieces.push({
             x: visibleStart,
             y,
@@ -722,19 +882,21 @@ function buildLayout(room, values) {
             touchesEnd: visibleEnd >= intervalEnd - MIN_VISIBLE_PLANK,
             outlineCut,
             wallCut,
+            edgeRip: Boolean(clippedRect.edgeRip),
             row,
             full: (
               Math.abs(length - plankLength) < 0.001
               && Math.abs(width - plankWidth) < 0.001
               && !outlineCut
               && !wallCut
+              && !clippedRect.edgeRip
             )
           });
         }
         x += plankLength;
       }
     });
-  });
+  }
 
   return { pieces, rips, adjustedStaggers };
 }
@@ -840,7 +1002,7 @@ function cutWidth(piece) {
 
 function cutKind(piece, values) {
   const endCut = cutLength(piece) < values.plankLength - 0.001;
-  const ripCut = cutWidth(piece) < values.plankWidth - 0.001;
+  const ripCut = piece.edgeRip || cutWidth(piece) < values.plankWidth - 0.001;
   const edgeCut = piece.outlineCut || piece.wallCut;
   if (edgeCut && endCut && ripCut) return "end + rip + edge";
   if (edgeCut && endCut) return "end + edge";
@@ -857,7 +1019,7 @@ function oppositeProfile(profile) {
 
 function keepProfile(piece, values) {
   const endCut = cutLength(piece) < values.plankLength - 0.001;
-  const ripCut = cutWidth(piece) < values.plankWidth - 0.001;
+  const ripCut = piece.edgeRip || cutWidth(piece) < values.plankWidth - 0.001;
   const edgeCut = piece.outlineCut || piece.wallCut;
   const startProfile = values.starterProfile;
   const endProfile = oppositeProfile(startProfile);
@@ -915,7 +1077,7 @@ function buildRipList(pieces, values) {
   const grouped = new Map();
   pieces
     .filter((piece) => {
-      const ripCut = cutWidth(piece) < values.plankWidth - 0.001;
+      const ripCut = piece.edgeRip || cutWidth(piece) < values.plankWidth - 0.001;
       return ripCut;
     })
     .forEach((piece) => {
@@ -1004,11 +1166,12 @@ function pieceLabel(piece, values) {
   return `${kind}${profileText}`;
 }
 
-function pieceToRoomRect(piece, runAxis) {
-  if (runAxis === "length") {
-    return { x: piece.x, y: piece.y, width: piece.length, height: piece.width };
-  }
-  return { x: piece.y, y: piece.x, width: piece.width, height: piece.length };
+function pieceToRoomRect(piece, room, values) {
+  return layoutRectToRoomRect(
+    { x: piece.x, y: piece.y, width: piece.length, height: piece.width },
+    room,
+    values
+  );
 }
 
 function resizeCanvas() {
@@ -1142,7 +1305,7 @@ function draw(values = latestValues, room = latestRoom, pieces = latestPieces) {
   ctx.clip();
 
   pieces.forEach((piece) => {
-    const roomPiece = pieceToRoomRect(piece, room.runAxis);
+    const roomPiece = pieceToRoomRect(piece, room, values);
     const x = originX + roomPiece.x * scale;
     const y = originY + roomPiece.y * scale;
     const width = roomPiece.width * scale;
@@ -1210,7 +1373,13 @@ function setPopoverContent(piece, values) {
   const row = document.createElement("span");
   row.textContent = `Row ${piece.row + 1}, ${sideLabel(piece)}`;
 
-  piecePopover.append(title, cut, row);
+  piecePopover.append(title, cut);
+  if (piece.edgeRip && Math.abs(cutWidth(piece) - values.plankWidth) < 0.001) {
+    const note = document.createElement("span");
+    note.textContent = "notched edge rip, template to outline";
+    piecePopover.appendChild(note);
+  }
+  piecePopover.appendChild(row);
 }
 
 function showPiecePopover(event, drawn) {
@@ -1380,7 +1549,7 @@ function update(options = {}) {
     renderCutList(els.ripList, ripCuts, "No ripped pieces.");
     renderCutList(els.cutList, buildCutList(pieces, values), "No cut pieces.");
     renderCutGroups(estimate.cutPacking, values);
-    els.directionNote.textContent = `Planks run along the room ${room.runAxis}.`;
+    els.directionNote.textContent = `Planks run along the room ${room.runAxis}, starting ${values.startCorner}.`;
     els.error.textContent = "";
     hidePiecePopover();
     draw();

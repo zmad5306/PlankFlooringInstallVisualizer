@@ -27,6 +27,7 @@ This project is ready to host as a static site. In the repository settings, enab
 - 1/3 stair-step row offset pattern with minimum end-cut adjustment
 - Minimum rip width handling by balancing first and last row rips
 - Planks can run along the room's long side or short side
+- Starting corner can be selected to control which end receives starter cuts
 - Full planks and cut planks are drawn with distinct colors/textures
 - Cut lists include dimensions, rip-only cuts, tongue/groove end guidance, and cut stock groupings
 - Estimates required plank count and waste with compatible offcut reuse
