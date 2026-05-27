@@ -52,6 +52,7 @@ const els = {
   wastePurchased: document.getElementById("wastePurchased"),
   installedArea: document.getElementById("installedArea"),
   purchasedArea: document.getElementById("purchasedArea"),
+  perimeterLength: document.getElementById("perimeterLength"),
   rectangleRoomFields: document.getElementById("rectangleRoomFields"),
   customRoomFields: document.getElementById("customRoomFields"),
   dividerWallFields: document.getElementById("dividerWallFields"),
@@ -231,6 +232,16 @@ function polygonArea(points) {
   return Math.abs(area) / 2;
 }
 
+function polygonPerimeter(points) {
+  let perimeter = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    perimeter += Math.hypot(next.x - current.x, next.y - current.y);
+  }
+  return perimeter;
+}
+
 function parseOutlineSegments(text) {
   const points = [{ x: 0, y: 0 }];
   const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
@@ -286,6 +297,7 @@ function buildRoom(values) {
   const width = bounds.maxX - bounds.minX;
   const height = bounds.maxY - bounds.minY;
   const area = polygonArea(polygon);
+  const perimeter = polygonPerimeter(polygon);
 
   if (area <= 0) {
     throw new Error("Room area must be greater than 0.");
@@ -296,6 +308,7 @@ function buildRoom(values) {
     width,
     height,
     area,
+    perimeter,
     runAxis: values.orientation === "long"
       ? (width >= height ? "length" : "width")
       : (width >= height ? "width" : "length")
@@ -1506,11 +1519,62 @@ function fmtArea(area) {
   return `${(area / 144).toFixed(2)} sq ft`;
 }
 
+function fmtLength(inches) {
+  return `${(inches / 12).toFixed(2)} ft (${formatInches(inches)}")`;
+}
+
 function floorAreaForEstimate(room, values) {
   const blockedArea = wallBlockedRects(values).reduce((sum, rect) => {
     return sum + Math.max(0, rect.x2 - rect.x1) * Math.max(0, rect.y2 - rect.y1);
   }, 0);
   return Math.max(0, room.area - blockedArea);
+}
+
+function pointInsideBlockedRects(point, blockedRects) {
+  return blockedRects.some((rect) => (
+    point.x > rect.x1 + 0.001
+    && point.x < rect.x2 - 0.001
+    && point.y > rect.y1 + 0.001
+    && point.y < rect.y2 - 0.001
+  ));
+}
+
+function exposedBlockedPerimeter(room, blockedRects) {
+  const sampleOffset = 0.05;
+  return blockedRects.reduce((sum, rect) => {
+    const edges = [
+      {
+        length: Math.max(0, rect.y2 - rect.y1),
+        sample: { x: rect.x1 - sampleOffset, y: (rect.y1 + rect.y2) / 2 }
+      },
+      {
+        length: Math.max(0, rect.y2 - rect.y1),
+        sample: { x: rect.x2 + sampleOffset, y: (rect.y1 + rect.y2) / 2 }
+      },
+      {
+        length: Math.max(0, rect.x2 - rect.x1),
+        sample: { x: (rect.x1 + rect.x2) / 2, y: rect.y1 - sampleOffset }
+      },
+      {
+        length: Math.max(0, rect.x2 - rect.x1),
+        sample: { x: (rect.x1 + rect.x2) / 2, y: rect.y2 + sampleOffset }
+      }
+    ];
+
+    const exposed = edges.reduce((edgeSum, edge) => {
+      if (pointInPolygon(edge.sample, room.polygon) && !pointInsideBlockedRects(edge.sample, blockedRects)) {
+        return edgeSum + edge.length;
+      }
+      return edgeSum;
+    }, 0);
+
+    return sum + exposed;
+  }, 0);
+}
+
+function perimeterForEstimate(room, values) {
+  const blockedRects = wallBlockedRects(values);
+  return room.perimeter + exposedBlockedPerimeter(room, blockedRects);
 }
 
 function update(options = {}) {
@@ -1546,6 +1610,7 @@ function update(options = {}) {
     els.wastePurchased.textContent = `${estimate.wastePurchased.toFixed(1)}%`;
     els.installedArea.textContent = fmtArea(estimate.installedArea);
     els.purchasedArea.textContent = fmtArea(estimate.purchasedArea);
+    els.perimeterLength.textContent = fmtLength(perimeterForEstimate(room, values));
     els.reuseNote.textContent = (
       `Waste estimate reuses compatible cut ends for opposite-side gaps before counting leftover material. ` +
       `Estimated leftover end-cut length: ${formatInches(estimate.endCutWasteLength)}".`

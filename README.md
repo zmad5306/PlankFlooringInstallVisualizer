@@ -31,3 +31,4 @@ This project is ready to host as a static site. In the repository settings, enab
 - Full planks and cut planks are drawn with distinct colors/textures
 - Cut lists include dimensions, rip-only cuts, tongue/groove end guidance, and cut stock groupings
 - Estimates required plank count and waste with compatible offcut reuse
+- Reports floor perimeter for baseboard or molding planning
