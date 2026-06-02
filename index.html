@@ -134,6 +134,12 @@ N 120</textarea>
           <option value="4">Fourths</option>
         </select>
       </label>
+      <label>Row alignment
+        <select id="rowAlignment">
+          <option value="keepStarterFull" selected>Keep starter row full</option>
+          <option value="avoidNarrowRips">Avoid narrow jog rips</option>
+        </select>
+      </label>
       <button id="resetSettings" type="button" class="secondary-button">Reset saved options</button>
 
       <div class="legend">
@@ -159,6 +165,7 @@ N 120</textarea>
         <div><dt>Purchased area</dt><dd id="purchasedArea">-</dd></div>
         <div><dt>Perimeter</dt><dd id="perimeterLength">-</dd></div>
       </dl>
+      <p class="field-note" id="layoutWarning"></p>
       <p class="reuse-note" id="reuseNote"></p>
       <h2>Rip Cuts</h2>
       <div id="ripList" class="cut-list"></div>

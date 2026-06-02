@@ -28,6 +28,7 @@ This project is ready to host as a static site. In the repository settings, enab
 - Minimum rip width handling by balancing first and last row rips
 - Planks can run along the room's long side or short side
 - Starting corner can be selected to control which end receives starter cuts
+- Row alignment can keep the starter row full or avoid narrow jog rips
 - Full planks and cut planks are drawn with distinct colors/textures
 - Cut lists include dimensions, rip-only cuts, tongue/groove end guidance, and cut stock groupings
 - Estimates required plank count and waste with compatible offcut reuse

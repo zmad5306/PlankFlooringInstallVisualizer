@@ -20,6 +20,7 @@ const DEFAULT_SETTINGS = {
   orientation: "long",
   startCorner: "NW",
   staggerDivisions: "3",
+  rowAlignment: "keepStarterFull",
   starterProfile: "tongue"
 };
 
@@ -57,6 +58,7 @@ const els = {
   customRoomFields: document.getElementById("customRoomFields"),
   dividerWallFields: document.getElementById("dividerWallFields"),
   shapeStatus: document.getElementById("shapeStatus"),
+  layoutWarning: document.getElementById("layoutWarning"),
   reuseNote: document.getElementById("reuseNote"),
   ripList: document.getElementById("ripList"),
   cutList: document.getElementById("cutList"),
@@ -102,6 +104,7 @@ function currentInputs() {
     orientation: document.querySelector("input[name='orientation']:checked").value,
     startCorner: document.getElementById("startCorner").value,
     staggerDivisions: numberValue("staggerDivisions", "Stair step"),
+    rowAlignment: document.getElementById("rowAlignment").value,
     starterProfile: document.getElementById("starterProfile").value
   };
 }
@@ -135,6 +138,7 @@ function readSettingsFromControls() {
     orientation: selectedOrientationControl()?.value || DEFAULT_SETTINGS.orientation,
     startCorner: document.getElementById("startCorner").value,
     staggerDivisions: document.getElementById("staggerDivisions").value,
+    rowAlignment: document.getElementById("rowAlignment").value,
     starterProfile: document.getElementById("starterProfile").value
   };
 }
@@ -158,6 +162,7 @@ function applySettings(settings) {
   document.getElementById("minRipWidth").value = merged.minRipWidth;
   document.getElementById("startCorner").value = merged.startCorner;
   document.getElementById("staggerDivisions").value = merged.staggerDivisions;
+  document.getElementById("rowAlignment").value = merged.rowAlignment;
   document.getElementById("starterProfile").value = merged.starterProfile;
 
   const orientation = document.querySelector(`input[name='orientation'][value='${merged.orientation}']`);
@@ -685,8 +690,9 @@ function ripPlan(rowDepth, plankWidth, minRipWidth) {
   let lastRip = leftover;
   let adjusted = false;
   const targetRip = Math.min(minRipWidth, plankWidth);
+  const narrowRipLimit = Math.min(targetRip, plankWidth / 2);
 
-  if (lastRip < plankWidth - 0.001 || lastRip < targetRip) {
+  if (lastRip < narrowRipLimit) {
     const balancedEdgeRip = (plankWidth + lastRip) / 2;
     firstRip = balancedEdgeRip;
     lastRip = balancedEdgeRip;
@@ -699,6 +705,115 @@ function ripPlan(rowDepth, plankWidth, minRipWidth) {
   }
   widths.push(lastRip);
   return { rows, widths, firstRip, lastRip, adjusted };
+}
+
+function ripPlanFromFirstWidth(rowDepth, plankWidth, minRipWidth, firstRip) {
+  const targetRip = Math.min(minRipWidth, plankWidth);
+  if (firstRip < targetRip - 0.001 || firstRip > plankWidth + 0.001 || firstRip > rowDepth + 0.001) {
+    return null;
+  }
+
+  const widths = [firstRip];
+  let remaining = rowDepth - firstRip;
+  while (remaining > plankWidth + MIN_VISIBLE_PLANK) {
+    widths.push(plankWidth);
+    remaining -= plankWidth;
+  }
+
+  if (remaining > MIN_VISIBLE_PLANK) {
+    if (remaining < targetRip - 0.001) {
+      return null;
+    }
+    widths.push(remaining);
+  }
+
+  const lastRip = widths[widths.length - 1] ?? firstRip;
+  return {
+    rows: widths.length,
+    widths,
+    firstRip,
+    lastRip,
+    adjusted: true
+  };
+}
+
+function edgeSplitPenalty(plan, rowDepth, splitPoints) {
+  const boundaries = [0];
+  plan.widths.reduce((position, width) => {
+    const next = position + width;
+    boundaries.push(next);
+    return next;
+  }, 0);
+
+  return splitPoints.reduce((penalty, point) => {
+    if (point <= 0.001 || point >= rowDepth - 0.001) {
+      return penalty;
+    }
+
+    for (let index = 0; index < boundaries.length - 1; index += 1) {
+      const start = boundaries[index];
+      const end = boundaries[index + 1];
+      if (point < start - 0.001 || point > end + 0.001) continue;
+      const lowerWidth = point - start;
+      const upperWidth = end - point;
+      const splitOnBoundary = lowerWidth < 0.001 || upperWidth < 0.001;
+      if (splitOnBoundary) {
+        return penalty;
+      }
+      const smallestSplit = Math.min(lowerWidth, upperWidth);
+      return smallestSplit < Math.min(plan.targetRip, plan.plankWidth) - 0.001
+        ? penalty + (Math.min(plan.targetRip, plan.plankWidth) - smallestSplit)
+        : penalty;
+    }
+
+    return penalty;
+  }, 0);
+}
+
+function candidateFirstRipForSplit(point, plankWidth, targetRip) {
+  const candidates = new Set();
+  [0, targetRip, -targetRip].forEach((offset) => {
+    let candidate = positiveModulo(point + offset, plankWidth);
+    if (candidate < MIN_VISIBLE_PLANK) {
+      candidate = plankWidth;
+    }
+    if (candidate >= targetRip - 0.001 && candidate <= plankWidth + 0.001) {
+      candidates.add(Number(candidate.toFixed(3)));
+    }
+  });
+  return [...candidates];
+}
+
+function alignRipPlanToEdgeSplits(basePlan, rowDepth, plankWidth, minRipWidth, splitPoints, allowStarterRip) {
+  if (!allowStarterRip && basePlan.firstRip >= plankWidth - 0.001) {
+    return basePlan;
+  }
+
+  const targetRip = Math.min(minRipWidth, plankWidth);
+  const candidates = [basePlan];
+
+  splitPoints.forEach((point) => {
+    candidateFirstRipForSplit(point, plankWidth, targetRip).forEach((firstRip) => {
+      const plan = ripPlanFromFirstWidth(rowDepth, plankWidth, minRipWidth, firstRip);
+      if (plan) {
+        candidates.push(plan);
+      }
+    });
+  });
+
+  candidates.forEach((plan) => {
+    plan.targetRip = targetRip;
+    plan.plankWidth = plankWidth;
+  });
+
+  return candidates.sort((a, b) => {
+    const splitPenalty = edgeSplitPenalty(a, rowDepth, splitPoints) - edgeSplitPenalty(b, rowDepth, splitPoints);
+    if (splitPenalty !== 0) return splitPenalty;
+    const aRips = Number(a.firstRip < plankWidth - 0.001) + Number(a.lastRip < plankWidth - 0.001);
+    const bRips = Number(b.firstRip < plankWidth - 0.001) + Number(b.lastRip < plankWidth - 0.001);
+    if (aRips !== bRips) return aRips - bRips;
+    return Math.abs(a.firstRip - basePlan.firstRip) - Math.abs(b.firstRip - basePlan.firstRip);
+  })[0];
 }
 
 function visibleLengthsForOffset(intervals, plankLength, offset) {
@@ -796,16 +911,8 @@ function buildLayout(room, values) {
   const layoutRoom = layoutRoomForInstall(room, values);
   const rowDepth = layoutRoom.height;
   const blockedRects = wallBlockedRects(values).map((rect) => roomWallToLayoutRect(rect, room, values));
-  const rips = ripPlan(rowDepth, plankWidth, minRipWidth);
   const pieces = [];
   let adjustedStaggers = 0;
-
-  const rowBoundaries = [0];
-  rips.widths.reduce((position, width) => {
-    const next = position + width;
-    rowBoundaries.push(next);
-    return next;
-  }, 0);
 
   const layoutSplitPoints = new Set();
   layoutRoom.polygon.forEach((point) => {
@@ -825,6 +932,22 @@ function buildLayout(room, values) {
   const internalSplitPoints = [...layoutSplitPoints]
     .filter((point) => point >= 0 && point <= rowDepth)
     .sort((a, b) => a - b);
+  const baseRips = ripPlan(rowDepth, plankWidth, minRipWidth);
+  const rips = alignRipPlanToEdgeSplits(
+    baseRips,
+    rowDepth,
+    plankWidth,
+    minRipWidth,
+    internalSplitPoints,
+    values.rowAlignment === "avoidNarrowRips"
+  );
+
+  const rowBoundaries = [0];
+  rips.widths.reduce((position, width) => {
+    const next = position + width;
+    rowBoundaries.push(next);
+    return next;
+  }, 0);
 
   function intervalsForRow(rowStart, rowEnd) {
     const samples = new Set([Number(((rowStart + rowEnd) / 2).toFixed(3))]);
@@ -1113,6 +1236,22 @@ function buildRipList(pieces, values) {
     if (b.length !== a.length) return b.length - a.length;
     return kindRank(a.kind) - kindRank(b.kind);
   });
+}
+
+function narrowRipWarnings(pieces, values) {
+  const targetRip = Math.min(values.minRipWidth, values.plankWidth);
+  if (targetRip <= MIN_VISIBLE_PLANK) {
+    return [];
+  }
+
+  return pieces
+    .filter((piece) => !piece.full)
+    .map((piece) => ({
+      row: piece.row + 1,
+      width: cutWidth(piece),
+      kind: cutKind(piece, values)
+    }))
+    .filter((piece) => piece.width < targetRip - 0.001 && piece.kind.includes("rip"));
 }
 
 function renderCutList(target, cuts, emptyText) {
@@ -1611,6 +1750,13 @@ function update(options = {}) {
     els.installedArea.textContent = fmtArea(estimate.installedArea);
     els.purchasedArea.textContent = fmtArea(estimate.purchasedArea);
     els.perimeterLength.textContent = fmtLength(perimeterForEstimate(room, values));
+    const narrowRips = narrowRipWarnings(pieces, values);
+    els.layoutWarning.textContent = narrowRips.length
+      ? (
+        `${narrowRips.length} rip/template piece${narrowRips.length === 1 ? "" : "s"} below the ${formatInches(values.minRipWidth)}" minimum. ` +
+        `Switch Row alignment to "Avoid narrow jog rips" to satisfy that minimum; this may rip the starter row.`
+      )
+      : "";
     els.reuseNote.textContent = (
       `Waste estimate reuses compatible cut ends for opposite-side gaps before counting leftover material. ` +
       `Estimated leftover end-cut length: ${formatInches(estimate.endCutWasteLength)}".`
@@ -1628,6 +1774,7 @@ function update(options = {}) {
     resizeCanvas();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     els.shapeStatus.textContent = error.message;
+    els.layoutWarning.textContent = "";
     els.error.textContent = error.message;
   }
 }
